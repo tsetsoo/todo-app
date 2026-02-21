@@ -1,0 +1,6 @@
+/target
+/frontend-dist
+/data
+*.db
+*.db-wal
+*.db-shm

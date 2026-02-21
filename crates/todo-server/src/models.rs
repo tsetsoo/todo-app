@@ -1,0 +1,27 @@
+use rusqlite::Row;
+use todo_shared::{Importance, Section, Todo};
+
+pub fn row_to_todo(row: &Row) -> rusqlite::Result<Todo> {
+    let id: String = row.get("id")?;
+    let section_str: String = row.get("section")?;
+    let title: String = row.get("title")?;
+    let completed: bool = row.get::<_, i32>("completed")? != 0;
+    let importance_str: String = row.get("importance")?;
+    let due_date: Option<String> = row.get("due_date")?;
+    let created_at: String = row.get("created_at")?;
+    let updated_at: String = row.get("updated_at")?;
+
+    let section = Section::from_str(&section_str).unwrap_or(Section::P);
+    let importance = Importance::from_str(&importance_str).unwrap_or_default();
+
+    Ok(Todo {
+        id,
+        section,
+        title,
+        completed,
+        importance,
+        due_date,
+        created_at,
+        updated_at,
+    })
+}

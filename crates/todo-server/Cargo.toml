@@ -1,0 +1,17 @@
+[package]
+name = "todo-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+todo-shared = { path = "../todo-shared" }
+actix-web = "4"
+actix-files = "0.6"
+actix-cors = "0.7"
+rusqlite = { version = "0.31", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.24"
+uuid = { version = "1", features = ["v4"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
