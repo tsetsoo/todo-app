@@ -22,7 +22,7 @@ impl Section {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Section> {
+    pub fn parse(s: &str) -> Option<Section> {
         match s {
             "Sp" => Some(Section::Sp),
             "I" => Some(Section::I),
@@ -39,10 +39,11 @@ impl std::fmt::Display for Section {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Importance {
     Low,
+    #[default]
     Medium,
     High,
     Critical,
@@ -62,7 +63,7 @@ impl Importance {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Importance> {
+    pub fn parse(s: &str) -> Option<Importance> {
         match s {
             "low" => Some(Importance::Low),
             "medium" => Some(Importance::Medium),
@@ -79,12 +80,6 @@ impl Importance {
             Importance::High => "High",
             Importance::Critical => "Critical",
         }
-    }
-}
-
-impl Default for Importance {
-    fn default() -> Self {
-        Importance::Medium
     }
 }
 

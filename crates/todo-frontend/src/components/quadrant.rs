@@ -131,7 +131,7 @@ pub fn Quadrant(
             <div class="quadrant-options">
                 <select on:change=move |ev| {
                     let val = event_target_value(&ev);
-                    if let Some(imp) = Importance::from_str(&val) {
+                    if let Some(imp) = Importance::parse(&val) {
                         set_importance.set(imp);
                     }
                 }>

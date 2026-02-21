@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy (server + shared)
+        run: cargo clippy -p todo-shared -p todo-server -- -D warnings
+      - name: Clippy (frontend, wasm)
+        run: cargo clippy -p todo-frontend --target wasm32-unknown-unknown -- -D warnings
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build server
+        run: cargo build -p todo-server
+      - name: Install trunk
+        run: cargo install trunk
+      - name: Build frontend
+        run: cd crates/todo-frontend && trunk build

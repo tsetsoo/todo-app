@@ -50,7 +50,7 @@ pub async fn list_todos(pool: web::Data<DbPool>, query: web::Query<TodosQuery>) 
     };
 
     let todos = if let Some(ref section_str) = query.section {
-        if Section::from_str(section_str).is_none() {
+        if Section::parse(section_str).is_none() {
             return HttpResponse::BadRequest().json(serde_json::json!({"error": "Invalid section"}));
         }
         let sql = format!("SELECT {} FROM todos WHERE section = ?1 ORDER BY {}", SELECT_COLS, order);

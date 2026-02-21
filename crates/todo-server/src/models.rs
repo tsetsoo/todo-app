@@ -11,8 +11,8 @@ pub fn row_to_todo(row: &Row) -> rusqlite::Result<Todo> {
     let created_at: String = row.get("created_at")?;
     let updated_at: String = row.get("updated_at")?;
 
-    let section = Section::from_str(&section_str).unwrap_or(Section::P);
-    let importance = Importance::from_str(&importance_str).unwrap_or_default();
+    let section = Section::parse(&section_str).unwrap_or(Section::P);
+    let importance = Importance::parse(&importance_str).unwrap_or_default();
 
     Ok(Todo {
         id,
