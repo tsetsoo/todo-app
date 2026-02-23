@@ -53,18 +53,18 @@ pub async fn list_todos(pool: web::Data<DbPool>, query: web::Query<TodosQuery>) 
         if Section::parse(section_str).is_none() {
             return HttpResponse::BadRequest().json(serde_json::json!({"error": "Invalid section"}));
         }
-        let sql = format!("SELECT {} FROM todos WHERE section = ?1 ORDER BY {}", SELECT_COLS, order);
+        let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE section = ?1 ORDER BY {order}");
         let mut stmt = conn.prepare(&sql).unwrap();
         stmt.query_map(params![section_str], row_to_todo)
             .unwrap()
-            .filter_map(|r| r.ok())
+            .filter_map(std::result::Result::ok)
             .collect::<Vec<_>>()
     } else {
-        let sql = format!("SELECT {} FROM todos ORDER BY {}", SELECT_COLS, order);
+        let sql = format!("SELECT {SELECT_COLS} FROM todos ORDER BY {order}");
         let mut stmt = conn.prepare(&sql).unwrap();
         stmt.query_map([], row_to_todo)
             .unwrap()
-            .filter_map(|r| r.ok())
+            .filter_map(std::result::Result::ok)
             .collect::<Vec<_>>()
     };
 
@@ -78,7 +78,7 @@ pub async fn get_todo(pool: web::Data<DbPool>, path: web::Path<String>) -> HttpR
         Err(e) => return HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()})),
     };
 
-    let sql = format!("SELECT {} FROM todos WHERE id = ?1", SELECT_COLS);
+    let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE id = ?1");
     let result = conn.query_row(&sql, params![id], row_to_todo);
 
     match result {
@@ -113,7 +113,7 @@ pub async fn create_todo(pool: web::Data<DbPool>, body: web::Json<CreateTodoRequ
 
     match result {
         Ok(_) => {
-            let sql = format!("SELECT {} FROM todos WHERE id = ?1", SELECT_COLS);
+            let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE id = ?1");
             let todo = conn.query_row(&sql, params![id], row_to_todo).unwrap();
             HttpResponse::Created().json(todo)
         }
@@ -134,8 +134,7 @@ pub async fn update_todo(
 
     let exists: bool = conn
         .query_row("SELECT COUNT(*) FROM todos WHERE id = ?1", params![id], |row| row.get::<_, i32>(0))
-        .map(|c| c > 0)
-        .unwrap_or(false);
+        .is_ok_and(|c| c > 0);
 
     if !exists {
         return HttpResponse::NotFound().json(serde_json::json!({"error": "Todo not found"}));
@@ -150,7 +149,7 @@ pub async fn update_todo(
     }
 
     if let Some(completed) = body.completed {
-        conn.execute("UPDATE todos SET completed = ?1, updated_at = datetime('now') WHERE id = ?2", params![completed as i32, id]).unwrap();
+        conn.execute("UPDATE todos SET completed = ?1, updated_at = datetime('now') WHERE id = ?2", params![i32::from(completed), id]).unwrap();
     }
 
     if let Some(section) = body.section {
@@ -165,7 +164,7 @@ pub async fn update_todo(
         conn.execute("UPDATE todos SET due_date = ?1, updated_at = datetime('now') WHERE id = ?2", params![due_date_opt.as_deref(), id]).unwrap();
     }
 
-    let sql = format!("SELECT {} FROM todos WHERE id = ?1", SELECT_COLS);
+    let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE id = ?1");
     let todo = conn.query_row(&sql, params![id], row_to_todo).unwrap();
     HttpResponse::Ok().json(todo)
 }
@@ -201,7 +200,7 @@ pub async fn toggle_todo(pool: web::Data<DbPool>, path: web::Path<String>) -> Ht
         return HttpResponse::NotFound().json(serde_json::json!({"error": "Todo not found"}));
     }
 
-    let sql = format!("SELECT {} FROM todos WHERE id = ?1", SELECT_COLS);
+    let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE id = ?1");
     let todo = conn.query_row(&sql, params![id], row_to_todo).unwrap();
     HttpResponse::Ok().json(todo)
 }

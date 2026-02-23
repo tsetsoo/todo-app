@@ -3,8 +3,7 @@ use wasm_bindgen::prelude::*;
 pub fn is_supported() -> bool {
     let window = web_sys::window().unwrap();
     js_sys::Reflect::get(&window, &"__speechSupported".into())
-        .map(|v| v.as_bool().unwrap_or(false))
-        .unwrap_or(false)
+        .is_ok_and(|v| v.as_bool().unwrap_or(false))
 }
 
 pub fn start_recognition<F>(on_done: F)

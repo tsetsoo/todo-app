@@ -4,14 +4,16 @@ use todo_shared::{CreateTodoRequest, DeleteResponse, Todo};
 fn api_base() -> String {
     let location = web_sys::window().unwrap().location();
     let origin = location.origin().unwrap();
-    format!("{}/api", origin)
+    format!("{origin}/api")
 }
 
 pub async fn fetch_todos(section: Option<&str>) -> Result<Vec<Todo>, String> {
-    let mut url = format!("{}/todos", api_base());
-    if let Some(s) = section {
-        url.push_str(&format!("?section={}", s));
-    }
+    let base = api_base();
+    let url = if let Some(s) = section {
+        format!("{base}/todos?section={s}")
+    } else {
+        format!("{base}/todos")
+    };
     let resp = Request::get(&url)
         .send()
         .await
@@ -31,7 +33,7 @@ pub async fn create_todo(req: &CreateTodoRequest) -> Result<Todo, String> {
 }
 
 pub async fn toggle_todo(id: &str) -> Result<Todo, String> {
-    let url = format!("{}/todos/{}/toggle", api_base(), id);
+    let url = format!("{}/todos/{id}/toggle", api_base());
     let resp = Request::post(&url)
         .send()
         .await
@@ -40,7 +42,7 @@ pub async fn toggle_todo(id: &str) -> Result<Todo, String> {
 }
 
 pub async fn delete_todo(id: &str) -> Result<DeleteResponse, String> {
-    let url = format!("{}/todos/{}", api_base(), id);
+    let url = format!("{}/todos/{id}", api_base());
     let resp = Request::delete(&url)
         .send()
         .await

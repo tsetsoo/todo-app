@@ -9,10 +9,12 @@ pub enum Section {
 }
 
 impl Section {
+    #[must_use] 
     pub fn all() -> &'static [Section] {
         &[Section::Sp, Section::I, Section::Si, Section::P]
     }
 
+    #[must_use] 
     pub fn as_str(&self) -> &'static str {
         match self {
             Section::Sp => "Sp",
@@ -22,6 +24,7 @@ impl Section {
         }
     }
 
+    #[must_use] 
     pub fn parse(s: &str) -> Option<Section> {
         match s {
             "Sp" => Some(Section::Sp),
@@ -50,10 +53,12 @@ pub enum Importance {
 }
 
 impl Importance {
+    #[must_use] 
     pub fn all() -> &'static [Importance] {
         &[Importance::Low, Importance::Medium, Importance::High, Importance::Critical]
     }
 
+    #[must_use] 
     pub fn as_str(&self) -> &'static str {
         match self {
             Importance::Low => "low",
@@ -63,6 +68,7 @@ impl Importance {
         }
     }
 
+    #[must_use] 
     pub fn parse(s: &str) -> Option<Importance> {
         match s {
             "low" => Some(Importance::Low),
@@ -73,6 +79,7 @@ impl Importance {
         }
     }
 
+    #[must_use] 
     pub fn label(&self) -> &'static str {
         match self {
             Importance::Low => "Low",

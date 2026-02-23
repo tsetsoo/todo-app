@@ -12,10 +12,11 @@ fn today() -> String {
     let y = date.get_full_year();
     let m = date.get_month() + 1;
     let d = date.get_date();
-    format!("{:04}-{:02}-{:02}", y, m, d)
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 #[component]
+#[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
 pub fn Quadrant(
     section: Section,
     refresh: ReadSignal<usize>,
@@ -82,7 +83,7 @@ pub fn Quadrant(
                 if current.is_empty() {
                     set_title.set(transcript);
                 } else {
-                    set_title.set(format!("{} {}", current, transcript));
+                    set_title.set(format!("{current} {transcript}"));
                 }
             }
         });
@@ -99,7 +100,7 @@ pub fn Quadrant(
             <div class="quadrant-add">
                 <input
                     type="text"
-                    placeholder=format!("Add to {}...", label)
+                    placeholder=format!("Add to {label}...")
                     prop:value=title
                     on:input=move |ev| set_title.set(event_target_value(&ev))
                     on:keydown=submit_key

@@ -5,6 +5,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::api;
 
 #[component]
+#[allow(clippy::needless_pass_by_value)]
 pub fn TodoItem(
     todo: Todo,
     on_changed: WriteSignal<usize>,

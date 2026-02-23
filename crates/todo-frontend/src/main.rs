@@ -1,3 +1,6 @@
+// Leptos view! macro requires wildcard import of leptos::*
+#![allow(clippy::wildcard_imports)]
+
 mod api;
 mod app;
 mod components;

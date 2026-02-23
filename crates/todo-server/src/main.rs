@@ -30,7 +30,7 @@ async fn main() -> std::io::Result<()> {
     let frontend_dir = std::env::var("FRONTEND_DIR")
         .unwrap_or_else(|_| "./frontend-dist".to_string());
 
-    println!("Serving frontend from: {}", frontend_dir);
+    println!("Serving frontend from: {frontend_dir}");
     println!("Starting server at http://{}", args.addr);
 
     let frontend_dir_clone = frontend_dir.clone();

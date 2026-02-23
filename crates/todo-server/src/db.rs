@@ -49,7 +49,7 @@ pub fn init_pool(db_path: &str) -> DbPool {
         .unwrap()
         .query_map([], |row| row.get::<_, String>(1))
         .unwrap()
-        .filter_map(|r| r.ok())
+        .filter_map(std::result::Result::ok)
         .collect();
 
     if !cols.iter().any(|c| c == "importance") {

@@ -1,6 +1,7 @@
 use actix_web::HttpResponse;
 use serde_json::json;
 
+#[allow(clippy::too_many_lines)]
 pub async fn describe() -> HttpResponse {
     let description = json!({
         "app": "TODO List",
