@@ -7,12 +7,19 @@ fn api_base() -> String {
     format!("{origin}/api")
 }
 
-pub async fn fetch_todos(section: Option<&str>) -> Result<Vec<Todo>, String> {
+pub async fn fetch_todos(section: Option<&str>, sort: Option<&str>) -> Result<Vec<Todo>, String> {
     let base = api_base();
-    let url = if let Some(s) = section {
-        format!("{base}/todos?section={s}")
-    } else {
+    let mut params = Vec::new();
+    if let Some(s) = section {
+        params.push(format!("section={s}"));
+    }
+    if let Some(s) = sort {
+        params.push(format!("sort={s}"));
+    }
+    let url = if params.is_empty() {
         format!("{base}/todos")
+    } else {
+        format!("{base}/todos?{}", params.join("&"))
     };
     let resp = Request::get(&url)
         .send()
@@ -50,11 +57,3 @@ pub async fn delete_todo(id: &str) -> Result<DeleteResponse, String> {
     resp.json().await.map_err(|e| e.to_string())
 }
 
-pub async fn fetch_all_by_importance() -> Result<Vec<Todo>, String> {
-    let url = format!("{}/todos?sort=importance", api_base());
-    let resp = Request::get(&url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    resp.json().await.map_err(|e| e.to_string())
-}

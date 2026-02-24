@@ -46,6 +46,9 @@ pub async fn list_todos(pool: web::Data<DbPool>, query: web::Query<TodosQuery>) 
             "CASE importance WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END ASC, created_at DESC"
         }
         Some("due_date") => "due_date IS NULL, due_date ASC, created_at DESC",
+        Some("importance_date") => {
+            "CASE importance WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END ASC, due_date IS NULL, due_date ASC, created_at DESC"
+        }
         _ => "created_at DESC",
     };
 

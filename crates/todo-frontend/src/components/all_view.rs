@@ -12,7 +12,7 @@ pub fn AllView(
     let todos_resource = create_resource(
         move || refresh.get(),
         |_| async move {
-            api::fetch_all_by_importance().await.unwrap_or_default()
+            api::fetch_todos(None, Some("importance_date")).await.unwrap_or_default()
         },
     );
 

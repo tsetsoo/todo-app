@@ -343,3 +343,55 @@ h1 {
 .importance-group.high h3 { color: #f59e0b; }
 .importance-group.medium h3 { color: #3b82f6; }
 .importance-group.low h3 { color: #94a3b8; }
+
+/* Section view */
+.section-view {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.section-view-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.section-view-header h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.section-view-add {
+    margin-bottom: 1rem;
+}
+
+.back-btn {
+    padding: 0.35rem 0.7rem;
+    background: #f0f0f0;
+    border: 1.5px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #555;
+    transition: all 0.15s;
+}
+
+.back-btn:hover {
+    background: #e0e0e0;
+    color: #333;
+}
+
+/* Open arrow in quadrant header */
+.open-arrow {
+    font-size: 0.9rem;
+    color: #bbb;
+    transition: color 0.15s;
+}
+
+.quadrant-header:hover .open-arrow {
+    color: #555;
+}

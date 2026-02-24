@@ -17,11 +17,11 @@ fn today() -> String {
 
 #[component]
 #[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
-pub fn Quadrant(
+pub fn SectionView(
     section: Section,
     refresh: ReadSignal<usize>,
     set_refresh: WriteSignal<usize>,
-    on_open: Callback<Section>,
+    on_back: WriteSignal<bool>,
 ) -> impl IntoView {
     let (title, set_title) = create_signal(String::new());
     let (importance, set_importance) = create_signal(Importance::Medium);
@@ -93,67 +93,71 @@ pub fn Quadrant(
     let label = section.as_str();
 
     view! {
-        <div class="quadrant">
-            <div class="quadrant-header" style="cursor:pointer" on:click=move |_| on_open.call(section)>
+        <div class="section-view">
+            <div class="section-view-header">
+                <button class="back-btn" on:click=move |_| on_back.set(true)>
+                    "\u{2190} Back"
+                </button>
                 <h2>{label}</h2>
                 <span class="quadrant-count">{count}</span>
-                <span class="open-arrow">"\u{2192}"</span>
             </div>
-            <div class="quadrant-add">
-                <input
-                    type="text"
-                    placeholder=format!("Add to {label}...")
-                    prop:value=title
-                    on:input=move |ev| set_title.set(event_target_value(&ev))
-                    on:keydown=submit_key
-                    prop:disabled=submitting
-                />
-                {if has_speech {
-                    Some(view! {
-                        <button
-                            class="mic-btn"
-                            class:listening=listening
-                            on:click=on_mic
-                            prop:disabled=listening
-                            title="Voice input"
-                        >
-                            {move || if listening.get() { "\u{25CF}" } else { "\u{1F3A4}" }}
-                        </button>
-                    })
-                } else {
-                    None
-                }}
-                <button
-                    class="add-btn"
-                    on:click=submit_click
-                    prop:disabled=move || submitting.get() || title.get().trim().is_empty()
-                >
-                    "+"
-                </button>
-            </div>
-            <div class="quadrant-options">
-                <select on:change=move |ev| {
-                    let val = event_target_value(&ev);
-                    if let Some(imp) = Importance::parse(&val) {
-                        set_importance.set(imp);
-                    }
-                }>
-                    {Importance::all().iter().map(|imp| {
-                        let val = imp.as_str();
-                        let lbl = imp.label();
-                        let selected = *imp == Importance::Medium;
-                        view! { <option value=val selected=selected>{lbl}</option> }
-                    }).collect_view()}
-                </select>
-                <input
-                    type="date"
-                    prop:value=due_date
-                    on:input=move |ev| {
-                        let el: web_sys::HtmlInputElement = ev.target().unwrap().unchecked_into();
-                        set_due_date.set(el.value());
-                    }
-                    title="Due date (optional)"
-                />
+            <div class="section-view-add">
+                <div class="quadrant-add">
+                    <input
+                        type="text"
+                        placeholder=format!("Add to {label}...")
+                        prop:value=title
+                        on:input=move |ev| set_title.set(event_target_value(&ev))
+                        on:keydown=submit_key
+                        prop:disabled=submitting
+                    />
+                    {if has_speech {
+                        Some(view! {
+                            <button
+                                class="mic-btn"
+                                class:listening=listening
+                                on:click=on_mic
+                                prop:disabled=listening
+                                title="Voice input"
+                            >
+                                {move || if listening.get() { "\u{25CF}" } else { "\u{1F3A4}" }}
+                            </button>
+                        })
+                    } else {
+                        None
+                    }}
+                    <button
+                        class="add-btn"
+                        on:click=submit_click
+                        prop:disabled=move || submitting.get() || title.get().trim().is_empty()
+                    >
+                        "+"
+                    </button>
+                </div>
+                <div class="quadrant-options">
+                    <select on:change=move |ev| {
+                        let val = event_target_value(&ev);
+                        if let Some(imp) = Importance::parse(&val) {
+                            set_importance.set(imp);
+                        }
+                    }>
+                        {Importance::all().iter().map(|imp| {
+                            let val = imp.as_str();
+                            let lbl = imp.label();
+                            let selected = *imp == Importance::Medium;
+                            view! { <option value=val selected=selected>{lbl}</option> }
+                        }).collect_view()}
+                    </select>
+                    <input
+                        type="date"
+                        prop:value=due_date
+                        on:input=move |ev| {
+                            let el: web_sys::HtmlInputElement = ev.target().unwrap().unchecked_into();
+                            set_due_date.set(el.value());
+                        }
+                        title="Due date (optional)"
+                    />
+                </div>
             </div>
             <ul class="todo-list">
                 {move || {
