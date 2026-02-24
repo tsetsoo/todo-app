@@ -1,5 +1,5 @@
 use gloo_net::http::Request;
-use todo_shared::{CreateTodoRequest, DeleteResponse, Todo};
+use todo_shared::{CreateTodoRequest, DeleteResponse, Todo, UpdateTodoRequest};
 
 fn api_base() -> String {
     let location = web_sys::window().unwrap().location();
@@ -42,6 +42,17 @@ pub async fn create_todo(req: &CreateTodoRequest) -> Result<Todo, String> {
 pub async fn toggle_todo(id: &str) -> Result<Todo, String> {
     let url = format!("{}/todos/{id}/toggle", api_base());
     let resp = Request::post(&url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.json().await.map_err(|e| e.to_string())
+}
+
+pub async fn update_todo(id: &str, req: &UpdateTodoRequest) -> Result<Todo, String> {
+    let url = format!("{}/todos/{id}", api_base());
+    let resp = Request::patch(&url)
+        .json(req)
+        .map_err(|e| e.to_string())?
         .send()
         .await
         .map_err(|e| e.to_string())?;

@@ -395,3 +395,60 @@ h1 {
 .quadrant-header:hover .open-arrow {
     color: #555;
 }
+
+/* Inline editing */
+.editable {
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.1s;
+}
+
+.editable:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.inline-title-input {
+    flex: 1;
+    font-size: 0.88rem;
+    padding: 0.15rem 0.35rem;
+    border: 1.5px solid #3b82f6;
+    border-radius: 4px;
+    outline: none;
+    min-width: 0;
+}
+
+.inline-importance-select {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.15rem 0.25rem;
+    border: 1.5px solid #3b82f6;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.inline-date-input {
+    font-size: 0.72rem;
+    padding: 0.1rem 0.25rem;
+    border: 1.5px solid #3b82f6;
+    border-radius: 4px;
+    outline: none;
+    width: 8.5rem;
+    flex-shrink: 0;
+}
+
+.add-due-date {
+    font-size: 0.72rem;
+    color: #bbb;
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+}
+
+.add-due-date:hover {
+    color: #888;
+    background: rgba(0, 0, 0, 0.04);
+}
