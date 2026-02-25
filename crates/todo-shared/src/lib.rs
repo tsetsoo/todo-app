@@ -107,6 +107,7 @@ pub struct Todo {
     pub due_date: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub completed_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -2,6 +2,7 @@ use leptos::*;
 use todo_shared::Section;
 
 use crate::components::all_view::AllView;
+use crate::components::archive_view::ArchiveView;
 use crate::components::quadrant::Quadrant;
 use crate::components::section_view::SectionView;
 
@@ -10,11 +11,13 @@ enum View {
     Home,
     Section(Section),
     AllByImportance,
+    Archive,
 }
 
 #[component]
 pub fn App() -> impl IntoView {
     let (refresh, set_refresh) = create_signal(0_usize);
+    crate::ws::connect(set_refresh, refresh);
     let (current_view, set_current_view) = create_signal(View::Home);
 
     // Signal used by SectionView to navigate back
@@ -58,6 +61,12 @@ pub fn App() -> impl IntoView {
                     >
                         "All"
                     </button>
+                    <button
+                        class:active=move || current_view.get() == View::Archive
+                        on:click=move |_| set_current_view.set(View::Archive)
+                    >
+                        "Archive"
+                    </button>
                 </div>
             </div>
             {move || {
@@ -91,6 +100,11 @@ pub fn App() -> impl IntoView {
                     View::AllByImportance => {
                         view! {
                             <AllView refresh=refresh set_refresh=set_refresh />
+                        }.into_view()
+                    }
+                    View::Archive => {
+                        view! {
+                            <ArchiveView refresh=refresh set_refresh=set_refresh />
                         }.into_view()
                     }
                 }

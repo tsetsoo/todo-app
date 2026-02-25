@@ -10,6 +10,7 @@ pub fn row_to_todo(row: &Row) -> rusqlite::Result<Todo> {
     let due_date: Option<String> = row.get("due_date")?;
     let created_at: String = row.get("created_at")?;
     let updated_at: String = row.get("updated_at")?;
+    let completed_at: Option<String> = row.get("completed_at")?;
 
     let section = Section::parse(&section_str).unwrap_or(Section::P);
     let importance = Importance::parse(&importance_str).unwrap_or_default();
@@ -23,5 +24,6 @@ pub fn row_to_todo(row: &Row) -> rusqlite::Result<Todo> {
         due_date,
         created_at,
         updated_at,
+        completed_at,
     })
 }

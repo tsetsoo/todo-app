@@ -5,6 +5,7 @@ mod api;
 mod app;
 mod components;
 mod speech;
+mod ws;
 
 use app::App;
 use leptos::*;

@@ -1,12 +1,13 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse};
 use rusqlite::params;
 use todo_shared::{CreateTodoRequest, DeleteResponse, Section, SectionCount, UpdateTodoRequest};
 use uuid::Uuid;
 
+use crate::broadcast::Broadcaster;
 use crate::db::DbPool;
 use crate::models::row_to_todo;
 
-const SELECT_COLS: &str = "id, section, title, completed, importance, due_date, created_at, updated_at";
+const SELECT_COLS: &str = "id, section, title, completed, importance, due_date, created_at, updated_at, completed_at";
 
 pub async fn get_sections(pool: web::Data<DbPool>) -> HttpResponse {
     let conn = match pool.get() {
@@ -15,13 +16,14 @@ pub async fn get_sections(pool: web::Data<DbPool>) -> HttpResponse {
     };
 
     let mut counts: Vec<SectionCount> = Vec::new();
+    let active_filter = "AND NOT (completed = 1 AND completed_at IS NOT NULL AND completed_at < datetime('now', '-1 day'))";
     for section in Section::all() {
         let s = section.as_str();
         let total: usize = conn
-            .query_row("SELECT COUNT(*) FROM todos WHERE section = ?1", params![s], |row| row.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM todos WHERE section = ?1 {active_filter}"), params![s], |row| row.get(0))
             .unwrap_or(0);
         let completed: usize = conn
-            .query_row("SELECT COUNT(*) FROM todos WHERE section = ?1 AND completed = 1", params![s], |row| row.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM todos WHERE section = ?1 AND completed = 1 {active_filter}"), params![s], |row| row.get(0))
             .unwrap_or(0);
         counts.push(SectionCount { section: *section, total, completed });
     }
@@ -33,6 +35,7 @@ pub async fn get_sections(pool: web::Data<DbPool>) -> HttpResponse {
 pub struct TodosQuery {
     pub section: Option<String>,
     pub sort: Option<String>,
+    pub show: Option<String>,
 }
 
 pub async fn list_todos(pool: web::Data<DbPool>, query: web::Query<TodosQuery>) -> HttpResponse {
@@ -52,18 +55,24 @@ pub async fn list_todos(pool: web::Data<DbPool>, query: web::Query<TodosQuery>) 
         _ => "created_at DESC",
     };
 
+    let show_filter = match query.show.as_deref() {
+        Some("archived") => "AND completed = 1 AND completed_at IS NOT NULL AND completed_at < datetime('now', '-1 day')",
+        Some("all") => "",
+        _ => "AND NOT (completed = 1 AND completed_at IS NOT NULL AND completed_at < datetime('now', '-1 day'))",
+    };
+
     let todos = if let Some(ref section_str) = query.section {
         if Section::parse(section_str).is_none() {
             return HttpResponse::BadRequest().json(serde_json::json!({"error": "Invalid section"}));
         }
-        let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE section = ?1 ORDER BY {order}");
+        let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE section = ?1 {show_filter} ORDER BY {order}");
         let mut stmt = conn.prepare(&sql).unwrap();
         stmt.query_map(params![section_str], row_to_todo)
             .unwrap()
             .filter_map(std::result::Result::ok)
             .collect::<Vec<_>>()
     } else {
-        let sql = format!("SELECT {SELECT_COLS} FROM todos ORDER BY {order}");
+        let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE 1=1 {show_filter} ORDER BY {order}");
         let mut stmt = conn.prepare(&sql).unwrap();
         stmt.query_map([], row_to_todo)
             .unwrap()
@@ -93,7 +102,7 @@ pub async fn get_todo(pool: web::Data<DbPool>, path: web::Path<String>) -> HttpR
     }
 }
 
-pub async fn create_todo(pool: web::Data<DbPool>, body: web::Json<CreateTodoRequest>) -> HttpResponse {
+pub async fn create_todo(pool: web::Data<DbPool>, body: web::Json<CreateTodoRequest>, broadcaster: web::Data<Broadcaster>) -> HttpResponse {
     let conn = match pool.get() {
         Ok(c) => c,
         Err(e) => return HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()})),
@@ -116,6 +125,7 @@ pub async fn create_todo(pool: web::Data<DbPool>, body: web::Json<CreateTodoRequ
 
     match result {
         Ok(_) => {
+            broadcaster.send();
             let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE id = ?1");
             let todo = conn.query_row(&sql, params![id], row_to_todo).unwrap();
             HttpResponse::Created().json(todo)
@@ -128,6 +138,7 @@ pub async fn update_todo(
     pool: web::Data<DbPool>,
     path: web::Path<String>,
     body: web::Json<UpdateTodoRequest>,
+    broadcaster: web::Data<Broadcaster>,
 ) -> HttpResponse {
     let id = path.into_inner();
     let conn = match pool.get() {
@@ -152,7 +163,11 @@ pub async fn update_todo(
     }
 
     if let Some(completed) = body.completed {
-        conn.execute("UPDATE todos SET completed = ?1, updated_at = datetime('now') WHERE id = ?2", params![i32::from(completed), id]).unwrap();
+        if completed {
+            conn.execute("UPDATE todos SET completed = 1, updated_at = datetime('now'), completed_at = COALESCE(completed_at, datetime('now')) WHERE id = ?1", params![id]).unwrap();
+        } else {
+            conn.execute("UPDATE todos SET completed = 0, updated_at = datetime('now'), completed_at = NULL WHERE id = ?1", params![id]).unwrap();
+        }
     }
 
     if let Some(section) = body.section {
@@ -167,12 +182,13 @@ pub async fn update_todo(
         conn.execute("UPDATE todos SET due_date = ?1, updated_at = datetime('now') WHERE id = ?2", params![due_date_opt.as_deref(), id]).unwrap();
     }
 
+    broadcaster.send();
     let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE id = ?1");
     let todo = conn.query_row(&sql, params![id], row_to_todo).unwrap();
     HttpResponse::Ok().json(todo)
 }
 
-pub async fn delete_todo(pool: web::Data<DbPool>, path: web::Path<String>) -> HttpResponse {
+pub async fn delete_todo(pool: web::Data<DbPool>, path: web::Path<String>, broadcaster: web::Data<Broadcaster>) -> HttpResponse {
     let id = path.into_inner();
     let conn = match pool.get() {
         Ok(c) => c,
@@ -184,11 +200,12 @@ pub async fn delete_todo(pool: web::Data<DbPool>, path: web::Path<String>) -> Ht
     if affected == 0 {
         HttpResponse::NotFound().json(serde_json::json!({"error": "Todo not found"}))
     } else {
+        broadcaster.send();
         HttpResponse::Ok().json(DeleteResponse { deleted: id })
     }
 }
 
-pub async fn toggle_todo(pool: web::Data<DbPool>, path: web::Path<String>) -> HttpResponse {
+pub async fn toggle_todo(pool: web::Data<DbPool>, path: web::Path<String>, broadcaster: web::Data<Broadcaster>) -> HttpResponse {
     let id = path.into_inner();
     let conn = match pool.get() {
         Ok(c) => c,
@@ -196,14 +213,37 @@ pub async fn toggle_todo(pool: web::Data<DbPool>, path: web::Path<String>) -> Ht
     };
 
     let affected = conn
-        .execute("UPDATE todos SET completed = 1 - completed, updated_at = datetime('now') WHERE id = ?1", params![id])
+        .execute(
+            "UPDATE todos SET completed = 1 - completed, updated_at = datetime('now'), completed_at = CASE WHEN completed = 0 THEN datetime('now') ELSE NULL END WHERE id = ?1",
+            params![id],
+        )
         .unwrap_or(0);
 
     if affected == 0 {
         return HttpResponse::NotFound().json(serde_json::json!({"error": "Todo not found"}));
     }
 
+    broadcaster.send();
     let sql = format!("SELECT {SELECT_COLS} FROM todos WHERE id = ?1");
     let todo = conn.query_row(&sql, params![id], row_to_todo).unwrap();
     HttpResponse::Ok().json(todo)
+}
+
+pub async fn ws_handler(
+    req: HttpRequest,
+    body: web::Payload,
+    broadcaster: web::Data<Broadcaster>,
+) -> actix_web::Result<HttpResponse> {
+    let (response, mut session, _msg_stream) = actix_ws::handle(&req, body)?;
+
+    let mut rx = broadcaster.subscribe();
+    actix_web::rt::spawn(async move {
+        while rx.recv().await.is_ok() {
+            if session.text("refresh").await.is_err() {
+                break;
+            }
+        }
+    });
+
+    Ok(response)
 }

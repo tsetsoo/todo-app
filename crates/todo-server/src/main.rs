@@ -1,3 +1,4 @@
+mod broadcast;
 mod db;
 mod describe;
 mod handlers;
@@ -25,6 +26,7 @@ async fn main() -> std::io::Result<()> {
 
     println!("Initializing database at: {}", args.db);
     let pool = db::init_pool(&args.db);
+    let broadcaster = broadcast::Broadcaster::new();
 
     // Determine frontend dist path
     let frontend_dir = std::env::var("FRONTEND_DIR")
@@ -34,6 +36,7 @@ async fn main() -> std::io::Result<()> {
     println!("Starting server at http://{}", args.addr);
 
     let frontend_dir_clone = frontend_dir.clone();
+    let broadcaster_clone = broadcaster.clone();
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -46,7 +49,9 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .wrap(middleware::Logger::default())
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(broadcaster_clone.clone()))
             // API routes
+            .route("/api/ws", web::get().to(handlers::ws_handler))
             .route("/api/describe", web::get().to(describe::describe))
             .route("/api/sections", web::get().to(handlers::get_sections))
             .route("/api/todos", web::get().to(handlers::list_todos))

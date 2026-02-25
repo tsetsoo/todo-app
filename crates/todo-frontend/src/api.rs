@@ -7,7 +7,7 @@ fn api_base() -> String {
     format!("{origin}/api")
 }
 
-pub async fn fetch_todos(section: Option<&str>, sort: Option<&str>) -> Result<Vec<Todo>, String> {
+pub async fn fetch_todos(section: Option<&str>, sort: Option<&str>, show: Option<&str>) -> Result<Vec<Todo>, String> {
     let base = api_base();
     let mut params = Vec::new();
     if let Some(s) = section {
@@ -15,6 +15,9 @@ pub async fn fetch_todos(section: Option<&str>, sort: Option<&str>) -> Result<Ve
     }
     if let Some(s) = sort {
         params.push(format!("sort={s}"));
+    }
+    if let Some(s) = show {
+        params.push(format!("show={s}"));
     }
     let url = if params.is_empty() {
         format!("{base}/todos")

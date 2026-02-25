@@ -34,7 +34,7 @@ pub fn Quadrant(
     let todos_resource = create_resource(
         move || refresh.get(),
         move |_| async move {
-            api::fetch_todos(Some(section.as_str()), Some("importance_date")).await.unwrap_or_default()
+            api::fetch_todos(Some(section.as_str()), Some("importance_date"), None).await.unwrap_or_default()
         },
     );
 
