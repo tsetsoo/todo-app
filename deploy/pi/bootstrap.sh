@@ -4,8 +4,11 @@ set -euo pipefail
 # Usage: sudo ./bootstrap.sh
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-install -d -o pi -g pi /opt/todo/releases /opt/todo/data
-install -m 0755 "$REPO_DIR/todo-update.sh" /opt/todo/todo-update.sh
+# /opt/todo, /opt/todo/releases, and the updater script are root-owned;
+# only /opt/todo/data (the sqlite db, owned by the todo.service user) is pi:pi.
+install -d -o root -g root -m 0755 /opt/todo /opt/todo/releases
+install -d -o pi -g pi -m 0755 /opt/todo/data
+install -o root -g root -m 0755 "$REPO_DIR/todo-update.sh" /opt/todo/todo-update.sh
 install -m 0644 "$REPO_DIR/todo.service" /etc/systemd/system/todo.service
 install -m 0644 "$REPO_DIR/todo-update.service" /etc/systemd/system/todo-update.service
 install -m 0644 "$REPO_DIR/todo-update.timer" /etc/systemd/system/todo-update.timer
