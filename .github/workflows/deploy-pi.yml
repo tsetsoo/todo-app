@@ -1,0 +1,65 @@
+name: Deploy Pi
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deploy-pi:
+    name: Build armv7 + publish pi-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-unknown,armv7-unknown-linux-gnueabihf
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: deploy-pi
+
+      - name: Install Trunk
+        run: cargo install trunk --locked
+
+      - name: Build frontend
+        run: cd crates/todo-frontend && trunk build --release
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --locked
+
+      - name: Cross-compile server (armv7)
+        run: cross build --release -p todo-server --target armv7-unknown-linux-gnueabihf
+
+      - name: Pack release
+        run: |
+          stage="$(mktemp -d)"
+          cp "target/armv7-unknown-linux-gnueabihf/release/todo-server" "$stage/todo-server"
+          chmod +x "$stage/todo-server"
+          cp -a frontend-dist "$stage/frontend-dist"
+          printf '%s\n' "${GITHUB_SHA}" > "$stage/SHA"
+          tar -C "$stage" -czf todo-pi.tar.gz todo-server frontend-dist SHA
+          printf '%s\n' "${GITHUB_SHA}" > SHA
+          ls -lh todo-pi.tar.gz SHA
+
+      - name: Publish pi-latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view pi-latest >/dev/null 2>&1; then
+            gh release upload pi-latest todo-pi.tar.gz SHA --clobber
+          else
+            gh release create pi-latest todo-pi.tar.gz SHA \
+              --title "Pi deploy (rolling)" \
+              --notes "Rolling artifact for raspberrypi. Updated on every main push." \
+              --latest=false
+          fi
+          # Move tag to this commit so release points at current main tip
+          git tag -f pi-latest "$GITHUB_SHA"
+          git push -f origin refs/tags/pi-latest
