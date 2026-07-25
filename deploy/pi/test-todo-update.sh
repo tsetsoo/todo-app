@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+UPDATE="$SCRIPT_DIR/todo-update.sh"
+MAKE_RELEASE="$SCRIPT_DIR/fixtures/make_release.sh"
+
+GOOD_SHA="aabbccddeeff00112233445566778899aabbccdd"
+BAD_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+tmpdir="$(mktemp -d)"
+health_pid=""
+release_pid=""
+
+cleanup() {
+  [[ -n "${health_pid:-}" ]] && kill "$health_pid" 2>/dev/null || true
+  [[ -n "${release_pid:-}" ]] && kill "$release_pid" 2>/dev/null || true
+  rm -rf "$tmpdir"
+}
+trap cleanup EXIT
+
+find_free_port() {
+  python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()'
+}
+
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
+
+pass() {
+  echo "PASS: $*"
+}
+
+[[ -x "$MAKE_RELEASE" ]] || fail "missing $MAKE_RELEASE"
+
+SYSTEMCTL_STUB="$tmpdir/systemctl-stub.sh"
+SYSTEMCTL_LOG="$tmpdir/systemctl.log"
+cat > "$SYSTEMCTL_STUB" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$SYSTEMCTL_LOG"
+exit 0
+EOF
+chmod +x "$SYSTEMCTL_STUB"
+touch "$SYSTEMCTL_LOG"
+
+HEALTH_PORT="$(find_free_port)"
+python3 - "$HEALTH_PORT" <<'PY' &
+import sys
+import http.server
+
+port = int(sys.argv[1])
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/api/sections" or self.path.startswith("/api/sections?"):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"[]")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, *_args):
+        pass
+
+http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()
+PY
+health_pid=$!
+
+export TODO_ROOT="$tmpdir/todo-root"
+RELEASE_FIXTURE="$tmpdir/release-fixture"
+"$MAKE_RELEASE" "$RELEASE_FIXTURE" "$GOOD_SHA"
+
+RELEASE_PORT="$(find_free_port)"
+python3 -m http.server "$RELEASE_PORT" --bind 127.0.0.1 --directory "$RELEASE_FIXTURE" &
+release_pid=$!
+sleep 0.5
+
+export TODO_RELEASE_BASE="http://127.0.0.1:${RELEASE_PORT}"
+export TODO_HEALTH_URL="http://127.0.0.1:${HEALTH_PORT}/api/sections"
+export TODO_SYSTEMCTL="$SYSTEMCTL_STUB"
+
+if [[ ! -x "$UPDATE" ]]; then
+  fail "todo-update.sh missing or not executable (expected before implementation)"
+fi
+
+# First run: install release and flip current
+if ! "$UPDATE" >"$tmpdir/first.out" 2>"$tmpdir/first.err"; then
+  cat "$tmpdir/first.out" "$tmpdir/first.err" >&2
+  fail "first update run failed"
+fi
+grep -q "deployed $GOOD_SHA" "$tmpdir/first.out" || fail "first run did not report deploy"
+
+current_target="$(readlink -f "$TODO_ROOT/current" 2>/dev/null || true)"
+expected_target="$(readlink -f "$TODO_ROOT/releases/$GOOD_SHA")"
+[[ "$current_target" == "$expected_target" ]] || fail "current does not point at releases/$GOOD_SHA"
+[[ -x "$TODO_ROOT/releases/$GOOD_SHA/todo-server" ]] || fail "todo-server missing in release"
+[[ -f "$TODO_ROOT/releases/$GOOD_SHA/frontend-dist/index.html" ]] || fail "index.html missing"
+grep -q 'restart todo' "$SYSTEMCTL_LOG" || fail "systemctl restart not recorded"
+
+pass "first run installed release and updated current"
+
+# Second run: no-op
+if ! "$UPDATE" >"$tmpdir/second.out" 2>"$tmpdir/second.err"; then
+  cat "$tmpdir/second.out" "$tmpdir/second.err" >&2
+  fail "second update run failed"
+fi
+grep -q "already at $GOOD_SHA" "$tmpdir/second.out" || fail "second run was not a no-op"
+current_after="$(readlink -f "$TODO_ROOT/current")"
+[[ "$current_after" == "$expected_target" ]] || fail "current changed on no-op run"
+
+pass "second run is no-op"
+
+# Bad release: incomplete payload must not move current
+mkdir -p "$tmpdir/bad-payload/frontend-dist"
+cat > "$tmpdir/bad-payload/todo-server" <<'EOF'
+#!/bin/sh
+echo fake-server
+EOF
+chmod +x "$tmpdir/bad-payload/todo-server"
+printf '%s\n' "$BAD_SHA" > "$tmpdir/bad-payload/SHA"
+tar -C "$tmpdir/bad-payload" -czf "$RELEASE_FIXTURE/todo-pi.tar.gz" todo-server frontend-dist SHA
+printf '%s\n' "$BAD_SHA" > "$RELEASE_FIXTURE/SHA"
+
+set +e
+"$UPDATE" >"$tmpdir/bad.out" 2>"$tmpdir/bad.err"
+bad_rc=$?
+set -e
+[[ "$bad_rc" -ne 0 ]] || fail "bad release update should fail"
+current_bad="$(readlink -f "$TODO_ROOT/current")"
+[[ "$current_bad" == "$expected_target" ]] || fail "current moved after bad release"
+[[ ! -d "$TODO_ROOT/releases/$BAD_SHA" ]] || fail "incomplete release dir should be removed"
+
+pass "bad release left current unchanged"
+
+echo "All offline update tests passed."
