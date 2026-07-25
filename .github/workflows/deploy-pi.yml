@@ -31,11 +31,15 @@ jobs:
       - name: Build frontend
         run: cd crates/todo-frontend && trunk build --release
 
-      - name: Install cross
-        run: cargo +stable install cross --git https://github.com/cross-rs/cross --locked
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: "0.16.0"
 
-      - name: Cross-compile server (armv7)
-        run: cross build --release -p todo-server --target armv7-unknown-linux-gnueabihf
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Cross-compile server (armv7, glibc <= 2.28 for Raspbian Buster)
+        run: cargo zigbuild --release -p todo-server --target armv7-unknown-linux-gnueabihf.2.28
 
       - name: Pack release
         run: |
