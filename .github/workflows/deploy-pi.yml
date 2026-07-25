@@ -1,4 +1,5 @@
 name: Deploy Pi
+# no-op: task-4 review evidence — verifying automatic pull-based update via todo-update.timer
 
 on:
   push:
