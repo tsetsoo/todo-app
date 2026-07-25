@@ -8,6 +8,8 @@ MAKE_RELEASE="$SCRIPT_DIR/fixtures/make_release.sh"
 GOOD_SHA="aabbccddeeff00112233445566778899aabbccdd"
 BAD_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 HEALTH_FAIL_SHA="cafebabecafebabecafebabecafebabecafebabe"
+MISMATCH_SHA="5555555555555555555555555555555555555555"
+RESTART_FAIL_SHA="6666666666666666666666666666666666666666"
 PRUNE_SHA_1="1111111111111111111111111111111111111111"
 PRUNE_SHA_2="2222222222222222222222222222222222222222"
 PRUNE_SHA_3="3333333333333333333333333333333333333333"
@@ -46,9 +48,15 @@ publish_release() {
 
 SYSTEMCTL_STUB="$tmpdir/systemctl-stub.sh"
 SYSTEMCTL_LOG="$tmpdir/systemctl.log"
+SYSTEMCTL_MODE="$tmpdir/systemctl.mode"
+echo ok >"$SYSTEMCTL_MODE"
 cat > "$SYSTEMCTL_STUB" <<EOF
 #!/usr/bin/env bash
 echo "\$*" >> "$SYSTEMCTL_LOG"
+mode="\$(cat "$SYSTEMCTL_MODE" 2>/dev/null || true)"
+if [[ "\$1" == "restart" && "\$mode" == "fail-restart" ]]; then
+  exit 1
+fi
 exit 0
 EOF
 chmod +x "$SYSTEMCTL_STUB"
@@ -163,6 +171,32 @@ current_bad="$(readlink -f "$TODO_ROOT/current")"
 
 pass "bad release left current unchanged"
 
+# Payload SHA mismatch: extracted SHA disagrees with the remote manifest SHA
+# (e.g. mid-publish clobber). Must abort without flipping current and must
+# not overwrite/trust the mismatched extracted SHA.
+mkdir -p "$tmpdir/mismatch-payload/frontend-dist"
+cat > "$tmpdir/mismatch-payload/todo-server" <<'EOF'
+#!/bin/sh
+echo fake-server
+EOF
+chmod +x "$tmpdir/mismatch-payload/todo-server"
+echo '<!doctype html><title>ok</title>' > "$tmpdir/mismatch-payload/frontend-dist/index.html"
+printf '%s\n' "$GOOD_SHA" > "$tmpdir/mismatch-payload/SHA"
+tar -C "$tmpdir/mismatch-payload" -czf "$RELEASE_FIXTURE/todo-pi.tar.gz" todo-server frontend-dist SHA
+printf '%s\n' "$MISMATCH_SHA" > "$RELEASE_FIXTURE/SHA"
+
+set +e
+"$UPDATE" >"$tmpdir/mismatch.out" 2>"$tmpdir/mismatch.err"
+mismatch_rc=$?
+set -e
+[[ "$mismatch_rc" -ne 0 ]] || fail "SHA mismatch update should fail"
+grep -q "payload SHA mismatch" "$tmpdir/mismatch.err" || fail "expected SHA mismatch message on stderr"
+current_mismatch="$(readlink -f "$TODO_ROOT/current")"
+[[ "$current_mismatch" == "$expected_target" ]] || fail "current moved after SHA mismatch"
+[[ ! -d "$TODO_ROOT/releases/$MISMATCH_SHA" ]] || fail "mismatched release dir should be removed"
+
+pass "payload SHA mismatch left current unchanged"
+
 # Health failure after symlink flip: rollback to previous release
 publish_release "$HEALTH_FAIL_SHA"
 echo fail >"$HEALTH_CONTROL"
@@ -188,6 +222,32 @@ restart_delta=$((restart_after_health_fail - restart_before_health_fail))
 pass "health failure rolled back current and retried systemctl restart"
 
 echo ok >"$HEALTH_CONTROL"
+
+# systemctl restart failure (post-flip) must also roll back, without set -e
+# aborting before the rollback path runs, and must reset-failed first.
+publish_release "$RESTART_FAIL_SHA"
+echo fail-restart >"$SYSTEMCTL_MODE"
+restart_before_restart_fail="$(grep -c 'restart todo' "$SYSTEMCTL_LOG" || true)"
+
+set +e
+"$UPDATE" >"$tmpdir/restart-fail.out" 2>"$tmpdir/restart-fail.err"
+restart_fail_rc=$?
+set -e
+echo ok >"$SYSTEMCTL_MODE"
+[[ "$restart_fail_rc" -ne 0 ]] || fail "restart-fail update should exit non-zero"
+grep -q "reset-failed todo" "$SYSTEMCTL_LOG" ||
+  fail "expected reset-failed todo before rollback restart"
+
+current_restart_fail="$(readlink -f "$TODO_ROOT/current")"
+[[ "$current_restart_fail" == "$expected_target" ]] ||
+  fail "current not rolled back to previous release after restart failure"
+
+restart_after_restart_fail="$(grep -c 'restart todo' "$SYSTEMCTL_LOG" || true)"
+restart_fail_delta=$((restart_after_restart_fail - restart_before_restart_fail))
+[[ "$restart_fail_delta" -ge 2 ]] ||
+  fail "expected initial + rollback systemctl restart attempts (got delta $restart_fail_delta)"
+
+pass "systemctl restart failure rolled back current without aborting under set -e"
 
 # KEEP_RELEASES pruning: four successful deploys leave only three dirs
 export TODO_ROOT="$tmpdir/prune-root"

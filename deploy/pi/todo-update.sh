@@ -30,6 +30,22 @@ if [[ -L "$TODO_ROOT/current" ]]; then
   prev="$(readlink -f "$TODO_ROOT/current" || true)"
 fi
 
+# Atomically point $TODO_ROOT/current at $1 (symlink swap via rename, not
+# an in-place unlink+relink) so a reader never observes a missing symlink.
+# "current" is itself a symlink to a directory, so a plain `mv src current`
+# would (on both GNU and BSD mv) follow it and move src *into* that
+# directory instead of replacing the symlink. GNU mv's -T and BSD mv's -h
+# both suppress that directory-following behavior; detect which we have.
+flip_current() {
+  local tmp="$TODO_ROOT/current.tmp"
+  ln -sfn "$1" "$tmp"
+  if mv --version >/dev/null 2>&1; then
+    mv -Tf "$tmp" "$TODO_ROOT/current"
+  else
+    mv -hf "$tmp" "$TODO_ROOT/current"
+  fi
+}
+
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
@@ -37,32 +53,47 @@ curl -fsSL "$TODO_RELEASE_BASE/todo-pi.tar.gz" -o "$workdir/todo-pi.tar.gz"
 dest="$TODO_ROOT/releases/$remote_sha"
 rm -rf "$dest"
 mkdir -p "$dest"
-tar -C "$dest" -xzf "$workdir/todo-pi.tar.gz"
+tar --no-same-owner -C "$dest" -xzf "$workdir/todo-pi.tar.gz"
 
-if [[ ! -x "$dest/todo-server" || ! -f "$dest/frontend-dist/index.html" ]]; then
+if [[ ! -x "$dest/todo-server" || ! -f "$dest/frontend-dist/index.html" || ! -f "$dest/SHA" ]]; then
   echo "release payload incomplete" >&2
   rm -rf "$dest"
   exit 1
 fi
-printf '%s\n' "$remote_sha" > "$dest/SHA"
+
+# Trust the SHA baked into the payload itself, but only if it matches what
+# the release manifest (remote_sha) advertised — otherwise we could deploy
+# content under the wrong version label. Never overwrite the extracted SHA
+# file with remote_sha: if they disagree, abort instead of masking it.
+extracted_sha="$(tr -d '[:space:]' < "$dest/SHA")"
+if [[ "$extracted_sha" != "$remote_sha" ]]; then
+  echo "payload SHA mismatch: extracted '$extracted_sha' != remote '$remote_sha'" >&2
+  rm -rf "$dest"
+  exit 1
+fi
 chmod +x "$dest/todo-server"
 
-ln -sfn "$dest" "$TODO_ROOT/current"
-"$TODO_SYSTEMCTL" restart todo
+flip_current "$dest"
+
+restart_failed=0
+"$TODO_SYSTEMCTL" restart todo || restart_failed=1
 
 ok=0
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -fsS "$TODO_HEALTH_URL" >/dev/null; then
-    ok=1
-    break
-  fi
-  sleep 1
-done
+if [[ "$restart_failed" -eq 0 ]]; then
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if curl -fsS "$TODO_HEALTH_URL" >/dev/null; then
+      ok=1
+      break
+    fi
+    sleep 1
+  done
+fi
 
-if [[ "$ok" -ne 1 ]]; then
+if [[ "$restart_failed" -eq 1 || "$ok" -ne 1 ]]; then
   echo "health check failed; rolling back" >&2
   if [[ -n "$prev" && -d "$prev" ]]; then
-    ln -sfn "$prev" "$TODO_ROOT/current"
+    "$TODO_SYSTEMCTL" reset-failed todo || true
+    flip_current "$prev"
     "$TODO_SYSTEMCTL" restart todo || true
   fi
   exit 1
