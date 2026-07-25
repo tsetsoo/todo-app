@@ -7,6 +7,11 @@ MAKE_RELEASE="$SCRIPT_DIR/fixtures/make_release.sh"
 
 GOOD_SHA="aabbccddeeff00112233445566778899aabbccdd"
 BAD_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+HEALTH_FAIL_SHA="cafebabecafebabecafebabecafebabecafebabe"
+PRUNE_SHA_1="1111111111111111111111111111111111111111"
+PRUNE_SHA_2="2222222222222222222222222222222222222222"
+PRUNE_SHA_3="3333333333333333333333333333333333333333"
+PRUNE_SHA_4="4444444444444444444444444444444444444444"
 
 tmpdir="$(mktemp -d)"
 health_pid=""
@@ -32,6 +37,11 @@ pass() {
   echo "PASS: $*"
 }
 
+publish_release() {
+  local sha="$1"
+  "$MAKE_RELEASE" "$RELEASE_FIXTURE" "$sha"
+}
+
 [[ -x "$MAKE_RELEASE" ]] || fail "missing $MAKE_RELEASE"
 
 SYSTEMCTL_STUB="$tmpdir/systemctl-stub.sh"
@@ -44,19 +54,36 @@ EOF
 chmod +x "$SYSTEMCTL_STUB"
 touch "$SYSTEMCTL_LOG"
 
+HEALTH_CONTROL="$tmpdir/health.mode"
+echo ok >"$HEALTH_CONTROL"
+
 HEALTH_PORT="$(find_free_port)"
-python3 - "$HEALTH_PORT" <<'PY' &
+python3 - "$HEALTH_PORT" "$HEALTH_CONTROL" <<'PY' &
 import sys
 import http.server
 
 port = int(sys.argv[1])
+control = sys.argv[2]
+
+
+def health_ok() -> bool:
+    try:
+        with open(control, encoding="utf-8") as f:
+            return f.read().strip() == "ok"
+    except OSError:
+        return True
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/sections" or self.path.startswith("/api/sections?"):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"[]")
+            if health_ok():
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"[]")
+            else:
+                self.send_response(503)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
@@ -64,13 +91,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
+
 http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 PY
 health_pid=$!
 
 export TODO_ROOT="$tmpdir/todo-root"
 RELEASE_FIXTURE="$tmpdir/release-fixture"
-"$MAKE_RELEASE" "$RELEASE_FIXTURE" "$GOOD_SHA"
+publish_release "$GOOD_SHA"
 
 RELEASE_PORT="$(find_free_port)"
 python3 -m http.server "$RELEASE_PORT" --bind 127.0.0.1 --directory "$RELEASE_FIXTURE" &
@@ -80,6 +108,7 @@ sleep 0.5
 export TODO_RELEASE_BASE="http://127.0.0.1:${RELEASE_PORT}"
 export TODO_HEALTH_URL="http://127.0.0.1:${HEALTH_PORT}/api/sections"
 export TODO_SYSTEMCTL="$SYSTEMCTL_STUB"
+export KEEP_RELEASES="${KEEP_RELEASES:-3}"
 
 if [[ ! -x "$UPDATE" ]]; then
   fail "todo-update.sh missing or not executable (expected before implementation)"
@@ -133,5 +162,70 @@ current_bad="$(readlink -f "$TODO_ROOT/current")"
 [[ ! -d "$TODO_ROOT/releases/$BAD_SHA" ]] || fail "incomplete release dir should be removed"
 
 pass "bad release left current unchanged"
+
+# Health failure after symlink flip: rollback to previous release
+publish_release "$HEALTH_FAIL_SHA"
+echo fail >"$HEALTH_CONTROL"
+restart_before_health_fail="$(grep -c 'restart todo' "$SYSTEMCTL_LOG" || true)"
+
+set +e
+"$UPDATE" >"$tmpdir/health-fail.out" 2>"$tmpdir/health-fail.err"
+health_fail_rc=$?
+set -e
+[[ "$health_fail_rc" -ne 0 ]] || fail "health-fail update should exit non-zero"
+grep -q "health check failed; rolling back" "$tmpdir/health-fail.err" ||
+  fail "expected health rollback message on stderr"
+
+current_health="$(readlink -f "$TODO_ROOT/current")"
+[[ "$current_health" == "$expected_target" ]] ||
+  fail "current not rolled back to previous release after health failure"
+
+restart_after_health_fail="$(grep -c 'restart todo' "$SYSTEMCTL_LOG" || true)"
+restart_delta=$((restart_after_health_fail - restart_before_health_fail))
+[[ "$restart_delta" -ge 2 ]] ||
+  fail "expected deploy + rollback systemctl restart attempts (got delta $restart_delta)"
+
+pass "health failure rolled back current and retried systemctl restart"
+
+echo ok >"$HEALTH_CONTROL"
+
+# KEEP_RELEASES pruning: four successful deploys leave only three dirs
+export TODO_ROOT="$tmpdir/prune-root"
+export KEEP_RELEASES=3
+: >"$SYSTEMCTL_LOG"
+mkdir -p "$TODO_ROOT"
+
+prune_shas=("$PRUNE_SHA_1" "$PRUNE_SHA_2" "$PRUNE_SHA_3" "$PRUNE_SHA_4")
+for sha in "${prune_shas[@]}"; do
+  publish_release "$sha"
+  if ! "$UPDATE" >"$tmpdir/prune-${sha}.out" 2>"$tmpdir/prune-${sha}.err"; then
+    cat "$tmpdir/prune-${sha}.out" "$tmpdir/prune-${sha}.err" >&2
+    fail "prune scenario deploy failed for $sha"
+  fi
+  grep -q "deployed $sha" "$tmpdir/prune-${sha}.out" ||
+    fail "prune deploy did not report success for $sha"
+  sleep 1
+done
+
+release_count="$(find "$TODO_ROOT/releases" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+[[ "$release_count" -eq 3 ]] ||
+  fail "expected 3 release directories after prune, got $release_count"
+
+[[ ! -d "$TODO_ROOT/releases/$PRUNE_SHA_1" ]] ||
+  fail "oldest release should have been pruned"
+
+for sha in "$PRUNE_SHA_2" "$PRUNE_SHA_3" "$PRUNE_SHA_4"; do
+  [[ -d "$TODO_ROOT/releases/$sha" ]] ||
+    fail "expected release $sha to remain after prune"
+done
+
+prune_current="$(readlink -f "$TODO_ROOT/current")"
+prune_expected="$(readlink -f "$TODO_ROOT/releases/$PRUNE_SHA_4")"
+[[ "$prune_current" == "$prune_expected" ]] ||
+  fail "current should point at newest release after prune sequence"
+[[ -d "$prune_current" ]] ||
+  fail "live current target directory missing after prune"
+
+pass "KEEP_RELEASES=3 retained three releases and kept live current"
 
 echo "All offline update tests passed."
