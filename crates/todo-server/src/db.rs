@@ -37,7 +37,8 @@ pub fn init_pool(db_path: &str) -> DbPool {
             importance TEXT NOT NULL DEFAULT 'medium' CHECK(importance IN ('low','medium','high','critical')),
             due_date   TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            completed_at TEXT
         )",
         params![],
     )
@@ -59,6 +60,12 @@ pub fn init_pool(db_path: &str) -> DbPool {
     if !cols.iter().any(|c| c == "due_date") {
         conn.execute("ALTER TABLE todos ADD COLUMN due_date TEXT", [])
             .expect("Failed to add due_date column");
+    }
+    if !cols.iter().any(|c| c == "completed_at") {
+        conn.execute("ALTER TABLE todos ADD COLUMN completed_at TEXT", [])
+            .expect("Failed to add completed_at column");
+        conn.execute("UPDATE todos SET completed_at = updated_at WHERE completed = 1 AND completed_at IS NULL", [])
+            .expect("Failed to backfill completed_at");
     }
 
     pool
