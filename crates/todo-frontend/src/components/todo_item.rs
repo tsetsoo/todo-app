@@ -4,6 +4,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::api;
+use crate::daily_ctx::DailyBoardExists;
 
 #[component]
 #[allow(clippy::needless_pass_by_value)]
@@ -12,18 +13,25 @@ pub fn TodoItem(
     on_changed: WriteSignal<usize>,
     refresh: ReadSignal<usize>,
     #[prop(optional)] show_section: bool,
+    #[prop(optional)] show_daily_actions: bool,
 ) -> impl IntoView {
+    let board_exists_ctx = use_context::<DailyBoardExists>().map(|c| c.0);
     let id_toggle = todo.id.clone();
     let id_delete = todo.id.clone();
     let id_title = todo.id.clone();
     let id_importance = todo.id.clone();
     let id_date = todo.id.clone();
+    let id_daily = todo.id.clone();
+    let id_remove_daily = todo.id.clone();
 
     let completed = todo.completed;
     let title = todo.title.clone();
     let importance = todo.importance;
     let due_date = todo.due_date.clone();
     let section = todo.section;
+    let daily_date = todo.daily_date.clone();
+    let carried_from = todo.carried_from.clone();
+    let on_daily = daily_date.is_some();
 
     let (editing_title, set_editing_title) = create_signal(false);
     let (editing_importance, set_editing_importance) = create_signal(false);
@@ -40,7 +48,7 @@ pub fn TodoItem(
             request_animation_frame(move || {
                 if let Some(el) = title_input_ref.get() {
                     let _ = el.focus();
-                    let _ = el.select();
+                    el.select();
                 }
             });
         }
@@ -78,6 +86,14 @@ pub fn TodoItem(
         let id = id_delete.clone();
         spawn_local(async move {
             let _ = api::delete_todo(&id).await;
+            on_changed.set(refresh.get_untracked() + 1);
+        });
+    };
+
+    let remove_from_daily = move |_| {
+        let id = id_remove_daily.clone();
+        spawn_local(async move {
+            let _ = api::set_todo_daily(&id, None).await;
             on_changed.set(refresh.get_untracked() + 1);
         });
     };
@@ -263,6 +279,16 @@ pub fn TodoItem(
                 <span class="todo-section-badge">{section.as_str()}</span>
             })}
 
+            {daily_date.as_ref().map(|d| {
+                let label = format!("On daily · {d}");
+                view! { <span class="daily-badge">{label}</span> }
+            })}
+
+            {carried_from.as_ref().filter(|_| !show_daily_actions).map(|d| {
+                let label = format!("Carried from {d}");
+                view! { <span class="carried-from">{label}</span> }
+            })}
+
             // Title: click to edit
             {move || {
                 if editing_title.get() {
@@ -309,6 +335,46 @@ pub fn TodoItem(
                     }.into_view()
                 }
             }}
+
+            {(show_daily_actions && on_daily).then(|| view! {
+                <button class="daily-action-btn" on:click=remove_from_daily title="Remove from Daily">
+                    "Remove from Daily"
+                </button>
+            })}
+
+            {(!show_daily_actions && !on_daily).then(|| {
+                let id_for_add = id_daily.clone();
+                view! {
+                    {move || {
+                        let exists = board_exists_ctx.map(|s| s.get()).unwrap_or(false);
+                        if exists {
+                            let id = id_for_add.clone();
+                            view! {
+                                <button
+                                    class="daily-action-btn"
+                                    on:click=move |_| {
+                                        let id = id.clone();
+                                        let today = api::local_today();
+                                        spawn_local(async move {
+                                            let _ = api::set_todo_daily(&id, Some(&today)).await;
+                                            on_changed.set(refresh.get_untracked() + 1);
+                                        });
+                                    }
+                                    title="Add to Daily"
+                                >
+                                    "Add to Daily"
+                                </button>
+                            }.into_view()
+                        } else {
+                            view! {
+                                <button class="daily-action-btn" disabled title="Create todos for today first">
+                                    "Add to Daily"
+                                </button>
+                            }.into_view()
+                        }
+                    }}
+                }
+            })}
 
             <button class="delete-btn" on:click=delete title="Delete">
                 "\u{00d7}"

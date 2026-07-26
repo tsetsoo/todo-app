@@ -105,6 +105,12 @@ pub struct Todo {
     pub importance: Importance,
     /// Optional due date in YYYY-MM-DD format
     pub due_date: Option<String>,
+    /// Optional daily board date in YYYY-MM-DD format
+    #[serde(default)]
+    pub daily_date: Option<String>,
+    /// Previous daily date when carried forward
+    #[serde(default)]
+    pub carried_from: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub completed_at: Option<String>,
@@ -144,4 +150,29 @@ pub struct SectionCount {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteResponse {
     pub deleted: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyStatus {
+    pub local_today: String,
+    pub has_today: bool,
+    pub has_tomorrow: bool,
+    /// Which create action the UI should offer: "today" or "tomorrow"
+    pub button: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateDailyRequest {
+    pub local_today: String,
+    /// "today" or "tomorrow"
+    #[serde(rename = "for")]
+    pub for_day: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetTodoDailyRequest {
+    /// Target daily date, or null to remove from Daily
+    pub date: Option<String>,
 }

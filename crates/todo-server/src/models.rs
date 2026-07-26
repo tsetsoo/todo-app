@@ -8,6 +8,8 @@ pub fn row_to_todo(row: &Row) -> rusqlite::Result<Todo> {
     let completed: bool = row.get::<_, i32>("completed")? != 0;
     let importance_str: String = row.get("importance")?;
     let due_date: Option<String> = row.get("due_date")?;
+    let daily_date: Option<String> = row.get("daily_date")?;
+    let carried_from: Option<String> = row.get("carried_from")?;
     let created_at: String = row.get("created_at")?;
     let updated_at: String = row.get("updated_at")?;
     let completed_at: Option<String> = row.get("completed_at")?;
@@ -22,6 +24,8 @@ pub fn row_to_todo(row: &Row) -> rusqlite::Result<Todo> {
         completed,
         importance,
         due_date,
+        daily_date,
+        carried_from,
         created_at,
         updated_at,
         completed_at,

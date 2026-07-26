@@ -67,6 +67,22 @@ pub fn init_pool(db_path: &str) -> DbPool {
         conn.execute("UPDATE todos SET completed_at = updated_at WHERE completed = 1 AND completed_at IS NULL", [])
             .expect("Failed to backfill completed_at");
     }
+    if !cols.iter().any(|c| c == "daily_date") {
+        conn.execute("ALTER TABLE todos ADD COLUMN daily_date TEXT", [])
+            .expect("Failed to add daily_date column");
+    }
+    if !cols.iter().any(|c| c == "carried_from") {
+        conn.execute("ALTER TABLE todos ADD COLUMN carried_from TEXT", [])
+            .expect("Failed to add carried_from column");
+    }
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS daily_days (
+            date TEXT PRIMARY KEY
+        )",
+        params![],
+    )
+    .expect("Failed to create daily_days table");
 
     pool
 }

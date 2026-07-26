@@ -1,10 +1,22 @@
 use gloo_net::http::Request;
-use todo_shared::{CreateTodoRequest, DeleteResponse, Todo, UpdateTodoRequest};
+use todo_shared::{
+    CreateDailyRequest, CreateTodoRequest, DailyStatus, DeleteResponse, SetTodoDailyRequest, Todo,
+    UpdateTodoRequest,
+};
 
 fn api_base() -> String {
     let location = web_sys::window().unwrap().location();
     let origin = location.origin().unwrap();
     format!("{origin}/api")
+}
+
+/// Local calendar date YYYY-MM-DD in the browser timezone.
+pub fn local_today() -> String {
+    let date = js_sys::Date::new_0();
+    let y = date.get_full_year();
+    let m = date.get_month() + 1;
+    let d = date.get_date();
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 pub async fn fetch_todos(section: Option<&str>, sort: Option<&str>, show: Option<&str>) -> Result<Vec<Todo>, String> {
@@ -68,6 +80,60 @@ pub async fn delete_todo(id: &str) -> Result<DeleteResponse, String> {
         .send()
         .await
         .map_err(|e| e.to_string())?;
+    resp.json().await.map_err(|e| e.to_string())
+}
+
+pub async fn fetch_daily_status(local_today: &str) -> Result<DailyStatus, String> {
+    let url = format!("{}/daily/status?local_today={local_today}", api_base());
+    let resp = Request::get(&url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.json().await.map_err(|e| e.to_string())
+}
+
+pub async fn fetch_daily(date: &str) -> Result<Vec<Todo>, String> {
+    let url = format!("{}/daily?date={date}", api_base());
+    let resp = Request::get(&url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.json().await.map_err(|e| e.to_string())
+}
+
+pub async fn create_daily(for_day: &str) -> Result<(), String> {
+    let url = format!("{}/daily/create", api_base());
+    let req = CreateDailyRequest {
+        local_today: local_today(),
+        for_day: for_day.to_string(),
+    };
+    let resp = Request::post(&url)
+        .json(&req)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if resp.status() >= 400 {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(body);
+    }
+    Ok(())
+}
+
+pub async fn set_todo_daily(id: &str, date: Option<&str>) -> Result<Todo, String> {
+    let url = format!("{}/todos/{id}/daily", api_base());
+    let req = SetTodoDailyRequest {
+        date: date.map(str::to_string),
+    };
+    let resp = Request::post(&url)
+        .json(&req)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if resp.status() == 409 {
+        return Err("Create todos for today first".into());
+    }
     resp.json().await.map_err(|e| e.to_string())
 }
 

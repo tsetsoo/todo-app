@@ -57,6 +57,103 @@ h1 {
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
+.mode-toggle {
+    margin-left: auto;
+}
+
+.general-mode .general-toggle {
+    margin-bottom: 1rem;
+}
+
+.daily-view {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.daily-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.daily-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.daily-date-label {
+    color: #666;
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+.daily-create-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.daily-create-btn:hover {
+    background: #1d4ed8;
+}
+
+.daily-badge,
+.carried-from {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.carried-from {
+    background: #fef3c7;
+    color: #92400e;
+    display: inline-block;
+    margin: 0.15rem 0 0.25rem 1.75rem;
+}
+
+.daily-todo-wrap {
+    margin-bottom: 0.35rem;
+}
+
+.daily-action-btn {
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: #374151;
+    white-space: nowrap;
+}
+
+.daily-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.empty-state {
+    color: #777;
+    padding: 1.5rem 0.5rem;
+}
+
+.error {
+    color: #b91c1c;
+    margin-bottom: 0.75rem;
+}
+
 /* Quadrant grid */
 .quadrant-grid {
     display: grid;

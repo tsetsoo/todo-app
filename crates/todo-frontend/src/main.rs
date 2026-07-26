@@ -4,6 +4,7 @@
 mod api;
 mod app;
 mod components;
+mod daily_ctx;
 mod speech;
 mod ws;
 

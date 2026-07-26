@@ -1,4 +1,5 @@
 mod broadcast;
+mod daily;
 mod db;
 mod describe;
 mod handlers;
@@ -59,7 +60,11 @@ async fn main() -> std::io::Result<()> {
             .route("/api/todos/{id}", web::get().to(handlers::get_todo))
             .route("/api/todos/{id}", web::patch().to(handlers::update_todo))
             .route("/api/todos/{id}", web::delete().to(handlers::delete_todo))
-            .route("/api/todos/{id}/toggle", web::post().to(handlers::toggle_todo));
+            .route("/api/todos/{id}/toggle", web::post().to(handlers::toggle_todo))
+            .route("/api/todos/{id}/daily", web::post().to(daily::set_todo_daily))
+            .route("/api/daily/status", web::get().to(daily::daily_status))
+            .route("/api/daily", web::get().to(daily::list_daily))
+            .route("/api/daily/create", web::post().to(daily::create_daily));
 
         // Serve frontend static files if the directory exists
         let fe_path = std::path::Path::new(&frontend_dir_clone);

@@ -7,7 +7,7 @@ use crate::broadcast::Broadcaster;
 use crate::db::DbPool;
 use crate::models::row_to_todo;
 
-const SELECT_COLS: &str = "id, section, title, completed, importance, due_date, created_at, updated_at, completed_at";
+pub(crate) const SELECT_COLS: &str = "id, section, title, completed, importance, due_date, daily_date, carried_from, created_at, updated_at, completed_at";
 
 pub async fn get_sections(pool: web::Data<DbPool>) -> HttpResponse {
     let conn = match pool.get() {
@@ -164,7 +164,11 @@ pub async fn update_todo(
 
     if let Some(completed) = body.completed {
         if completed {
-            conn.execute("UPDATE todos SET completed = 1, updated_at = datetime('now'), completed_at = COALESCE(completed_at, datetime('now')) WHERE id = ?1", params![id]).unwrap();
+            conn.execute(
+                "UPDATE todos SET completed = 1, updated_at = datetime('now'), completed_at = COALESCE(completed_at, datetime('now')), carried_from = NULL WHERE id = ?1",
+                params![id],
+            )
+            .unwrap();
         } else {
             conn.execute("UPDATE todos SET completed = 0, updated_at = datetime('now'), completed_at = NULL WHERE id = ?1", params![id]).unwrap();
         }
@@ -214,7 +218,12 @@ pub async fn toggle_todo(pool: web::Data<DbPool>, path: web::Path<String>, broad
 
     let affected = conn
         .execute(
-            "UPDATE todos SET completed = 1 - completed, updated_at = datetime('now'), completed_at = CASE WHEN completed = 0 THEN datetime('now') ELSE NULL END WHERE id = ?1",
+            "UPDATE todos SET
+                completed = 1 - completed,
+                updated_at = datetime('now'),
+                completed_at = CASE WHEN completed = 0 THEN datetime('now') ELSE NULL END,
+                carried_from = CASE WHEN completed = 0 THEN NULL ELSE carried_from END
+             WHERE id = ?1",
             params![id],
         )
         .unwrap_or(0);
