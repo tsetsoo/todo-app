@@ -12,11 +12,30 @@ fn api_base() -> String {
 
 /// Local calendar date YYYY-MM-DD in the browser timezone.
 pub fn local_today() -> String {
-    let date = js_sys::Date::new_0();
+    format_js_date(&js_sys::Date::new_0())
+}
+
+fn format_js_date(date: &js_sys::Date) -> String {
     let y = date.get_full_year();
     let m = date.get_month() + 1;
     let d = date.get_date();
     format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Shift a YYYY-MM-DD date by `delta` calendar days (browser local TZ).
+pub fn shift_date(date: &str, delta: i32) -> String {
+    let parts: Vec<&str> = date.split('-').collect();
+    if parts.len() != 3 {
+        return local_today();
+    }
+    let y: u32 = parts[0].parse().unwrap_or(1970);
+    let m: i32 = parts[1].parse::<i32>().unwrap_or(1);
+    let d: i32 = parts[2].parse().unwrap_or(1);
+    // JS Date months are 0-based; noon avoids DST edge flips.
+    let js = js_sys::Date::new_with_year_month_day_hr_min_sec_milli(y, m - 1, d, 12, 0, 0, 0);
+    let next = i32::try_from(js.get_date()).unwrap_or(d).saturating_add(delta);
+    js.set_date(next as u32);
+    format_js_date(&js)
 }
 
 pub async fn fetch_todos(section: Option<&str>, sort: Option<&str>, show: Option<&str>) -> Result<Vec<Todo>, String> {

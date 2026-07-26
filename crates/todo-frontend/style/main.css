@@ -88,7 +88,44 @@ h1 {
 .daily-date-label {
     color: #666;
     font-size: 0.9rem;
-    margin-top: 0.25rem;
+    margin-top: 0.35rem;
+}
+
+.daily-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.daily-nav-btn {
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    border-radius: 6px;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #374151;
+}
+
+.daily-nav-btn:hover {
+    background: #f3f4f6;
+}
+
+.daily-nav-btn.today-btn {
+    font-weight: 600;
+    background: #e0e7ff;
+    border-color: #c7d2fe;
+    color: #3730a3;
+}
+
+.daily-date-input {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 0.3rem 0.45rem;
+    font-size: 0.85rem;
+    color: #333;
 }
 
 .daily-create-btn {

@@ -97,10 +97,10 @@ fn carry_incomplete(conn: &Connection, from: &str, to: &str) -> rusqlite::Result
 }
 
 fn list_for_date(conn: &Connection, date: &str) -> rusqlite::Result<Vec<Todo>> {
-    let show_filter = "AND NOT (completed = 1 AND completed_at IS NOT NULL AND completed_at < datetime('now', '-1 day'))";
+    // History view: return every todo on that board, including completed.
     let order = "CASE importance WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END ASC, due_date IS NULL, due_date ASC, created_at DESC";
     let sql = format!(
-        "SELECT {SELECT_COLS} FROM todos WHERE daily_date = ?1 {show_filter} ORDER BY {order}"
+        "SELECT {SELECT_COLS} FROM todos WHERE daily_date = ?1 ORDER BY {order}"
     );
     let mut stmt = conn.prepare(&sql)?;
     let todos = stmt
