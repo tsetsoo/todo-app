@@ -1,20 +1,20 @@
 use leptos::*;
-use todo_shared::{DailyStatus, Todo};
+use todo_shared::{DailyStatus, Section, Todo};
 use wasm_bindgen_futures::spawn_local;
 
 use crate::api;
-use crate::components::todo_item::TodoItem;
+use crate::components::daily_pick_modal::DailyPickModal;
+use crate::components::daily_quadrant::DailyQuadrant;
 
 #[component]
-#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
 pub fn DailyView(refresh: ReadSignal<usize>, set_refresh: WriteSignal<usize>) -> impl IntoView {
     let (status, set_status) = create_signal(None::<DailyStatus>);
     let (viewed_date, set_viewed_date) = create_signal(api::local_today());
     let (todos, set_todos) = create_signal(Vec::<Todo>::new());
-    let (board_exists, set_board_exists) = create_signal(false);
     let (error, set_error) = create_signal(None::<String>);
+    let (picker_date, set_picker_date) = create_signal(None::<String>);
 
-    // Keep viewed_date on "today" when the calendar day rolls, if user was on today.
     create_effect(move |_| {
         let _ = refresh.get();
         let today = api::local_today();
@@ -32,26 +32,31 @@ pub fn DailyView(refresh: ReadSignal<usize>, set_refresh: WriteSignal<usize>) ->
         spawn_local(async move {
             match api::fetch_daily(&date).await {
                 Ok(list) => {
-                    // Board "exists" if API returns ok; empty list may mean no board or empty board.
-                    // Probe status/days via create status: if date == today use has_today; else any todos OR we allow browsing empty.
-                    set_todos.set(list.clone());
-                    set_board_exists.set(!list.is_empty());
+                    set_todos.set(list);
                     set_error.set(None);
                 }
                 Err(e) => set_error.set(Some(e)),
             }
-            // Refine board existence for today from status; for other dates, empty is still viewable.
             let today = api::local_today();
             if date == today {
                 if let Ok(s) = api::fetch_daily_status(&today).await {
-                    set_board_exists.set(s.has_today);
                     set_status.set(Some(s));
                 }
-            } else {
-                // Past/future: treat as browsable; empty message differs.
-                set_board_exists.set(true);
             }
         });
+    });
+
+    let daily_todos = Signal::derive(move || todos.get());
+    let board_ready = Signal::derive(move || {
+        let today = api::local_today();
+        let date = viewed_date.get();
+        if date == today {
+            status.get().is_some_and(|s| s.has_today)
+        } else if date == api::shift_date(&today, 1) {
+            status.get().is_some_and(|s| s.has_tomorrow)
+        } else {
+            true
+        }
     });
 
     let on_create = move |_| {
@@ -65,14 +70,20 @@ pub fn DailyView(refresh: ReadSignal<usize>, set_refresh: WriteSignal<usize>) ->
                 return;
             }
             let today = api::local_today();
-            if for_day == "today" {
-                set_viewed_date.set(today);
-            } else if for_day == "tomorrow" {
-                set_viewed_date.set(api::shift_date(&today, 1));
-            }
+            let target = if for_day == "tomorrow" {
+                api::shift_date(&today, 1)
+            } else {
+                today
+            };
+            set_viewed_date.set(target.clone());
+            set_picker_date.set(Some(target));
             set_refresh.set(refresh.get_untracked() + 1);
         });
     };
+
+    let close_picker = Callback::new(move |()| {
+        set_picker_date.set(None);
+    });
 
     let go_prev = move |_| {
         set_viewed_date.update(|d| *d = api::shift_date(d, -1));
@@ -140,54 +151,52 @@ pub fn DailyView(refresh: ReadSignal<usize>, set_refresh: WriteSignal<usize>) ->
             {move || error.get().map(|e| view! { <p class="error">{e}</p> })}
 
             {move || {
-                let list = todos.get();
                 let today = api::local_today();
                 let date = viewed_date.get();
                 let is_today = date == today;
                 let has_board = if is_today {
                     status.get().is_some_and(|s| s.has_today)
                 } else {
-                    board_exists.get() || !list.is_empty()
+                    true
                 };
 
                 if is_today && !has_board {
                     view! {
                         <p class="empty-state">
-                            "Start your day with Create todos for today. Incomplete items from the previous daily will carry forward."
+                            "Start your day with Create todos for today. You'll pick items from General, and incomplete items from the previous daily will carry forward."
                         </p>
-                    }.into_view()
-                } else if list.is_empty() {
-                    let msg = if is_today {
-                        "No todos on today's list yet. Pull items from General.".to_string()
-                    } else {
-                        format!("No todos on {date}.")
-                    };
-                    view! {
-                        <p class="empty-state">{msg}</p>
                     }.into_view()
                 } else {
                     view! {
-                        <ul class="todo-list">
-                            {list.into_iter().map(|todo| {
-                                let carried = todo.carried_from.clone();
+                        <div class="quadrant-grid">
+                            {Section::all().iter().map(|&section| {
                                 view! {
-                                    <div class="daily-todo-wrap">
-                                        {carried.map(|d| view! {
-                                            <span class="carried-from">{format!("Carried from {d}")}</span>
-                                        })}
-                                        <TodoItem
-                                            todo=todo
-                                            on_changed=set_refresh
-                                            refresh=refresh
-                                            show_section=true
-                                            show_daily_actions=true
-                                        />
-                                    </div>
+                                    <DailyQuadrant
+                                        section=section
+                                        date=viewed_date
+                                        refresh=refresh
+                                        set_refresh=set_refresh
+                                        daily_todos=daily_todos
+                                        board_ready=board_ready
+                                    />
                                 }
                             }).collect_view()}
-                        </ul>
+                        </div>
                     }.into_view()
                 }
+            }}
+
+            {move || {
+                picker_date.get().map(|date| {
+                    view! {
+                        <DailyPickModal
+                            target_date=date
+                            on_close=close_picker
+                            set_refresh=set_refresh
+                            refresh=refresh
+                        />
+                    }
+                })
             }}
         </div>
     }
