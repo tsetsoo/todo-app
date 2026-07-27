@@ -30,7 +30,6 @@ pub fn TodoItem(
     let due_date = todo.due_date.clone();
     let section = todo.section;
     let daily_date = todo.daily_date.clone();
-    let carried_from = todo.carried_from.clone();
     let on_daily = daily_date.is_some();
 
     let (editing_title, set_editing_title) = create_signal(false);
@@ -284,11 +283,6 @@ pub fn TodoItem(
                     let label = format!("On daily · {d}");
                     view! { <span class="daily-badge">{label}</span> }
                 })
-            })}
-
-            {carried_from.as_ref().filter(|_| !show_daily_actions).map(|d| {
-                let label = format!("Carried from {d}");
-                view! { <span class="carried-from">{label}</span> }
             })}
 
             // Title: click to edit
