@@ -279,9 +279,11 @@ pub fn TodoItem(
                 <span class="todo-section-badge">{section.as_str()}</span>
             })}
 
-            {daily_date.as_ref().map(|d| {
-                let label = format!("On daily · {d}");
-                view! { <span class="daily-badge">{label}</span> }
+            {(!show_daily_actions).then(|| {
+                daily_date.as_ref().map(|d| {
+                    let label = format!("On daily · {d}");
+                    view! { <span class="daily-badge">{label}</span> }
+                })
             })}
 
             {carried_from.as_ref().filter(|_| !show_daily_actions).map(|d| {
