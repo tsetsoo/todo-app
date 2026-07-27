@@ -37,6 +37,6 @@ jobs:
       - name: Build server
         run: cargo build -p todo-server
       - name: Install trunk
-        run: cargo install trunk
+        run: cargo install trunk --version 0.21.14 --locked
       - name: Build frontend
         run: cd crates/todo-frontend && trunk build

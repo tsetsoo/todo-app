@@ -30,7 +30,7 @@ jobs:
           key: deploy-pi
 
       - name: Install Trunk
-        run: cargo install trunk --locked
+        run: cargo install trunk --version 0.21.14 --locked
 
       - name: Build frontend
         run: cd crates/todo-frontend && trunk build --release
