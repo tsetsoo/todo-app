@@ -149,7 +149,7 @@ All endpoints need the bearer token, like the rest.
 | Method | Path | Purpose |
 |---|---|---|
 | `PUT` | `/api/push/devices` | Upsert `{token, platform, environment, bundle_id, app_version, device_name?}`. Validates: token is hex, 32–200 bytes; enums. Returns the device. |
-| `DELETE` | `/api/push/devices/{token}` | Unregister (toggle off). 204, or 404 if unknown. |
+| `POST` | `/api/push/devices/unregister` | `{token}`: unregister (toggle off). 204, or 404 if unknown. The token goes in the body because request paths are written to the access log. |
 | `GET` | `/api/push/devices` | List, for Settings/debugging; the response carries only the first 8 hex chars of each token. |
 | `GET` / `PUT` | `/api/push/settings` | `{notify_waiting, done_after_minutes, grace_seconds, quiet_hours: {start, end, tz} \| null, muted_sections: [..], muted_todo_ids: [..]}`. `PUT` replaces the scalar settings and section mutes; todo mutes use the endpoints below. Unknown tz → 400. |
 | `PUT` / `DELETE` | `/api/todos/{id}/push-mute` | Mute / unmute one todo. 404 for an unknown todo. |
@@ -289,7 +289,7 @@ Headers:
 - **Registration:**
   - While the toggle is on, `registerForRemoteNotifications()` runs on every launch.
   - `didRegisterForRemoteNotificationsWithDeviceToken` → `PUT /api/push/devices`, also re-sent when the hub URL/token changes in Settings.
-  - Toggle off → `DELETE /api/push/devices/{token}` + `unregisterForRemoteNotifications()`.
+  - Toggle off → `POST /api/push/devices/unregister` + `unregisterForRemoteNotifications()`.
   - `PUT` answers 404 (older server) → `pushState = .localOnly("server has no push support")`, and local alerts keep working while the app runs.
 - **Tap / deep link:** `didReceive response` → `payload.todo_id` → `onOpenTodo`, buffered until set (cold launch). The `Mute this todo` action → `setMuted` in a background task.
 - **Presence:**
