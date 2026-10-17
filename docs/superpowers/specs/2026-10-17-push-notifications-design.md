@@ -1,7 +1,7 @@
 # Push Notifications Design
 
 **Date:** 2026-10-17  
-**Status:** Draft, awaiting approval  
+**Status:** Approved 2026-10-17 (including the Pi → APNs outbound call); open questions taken at their defaults  
 **Repos:** todo-app (this spec: server, schema, APNs), ai-session-remote (app, hook scripts)  
 **Builds on:** [2026-10-15 todo AI conversations](2026-10-15-todo-ai-conversations-design.md), [2026-10-16 projects/memories](https://github.com/tsetsoo/todo-app/pull/5) (schema v3, not merged yet)
 
@@ -370,7 +370,7 @@ Older builds:
 - A new app on an old server gets 404 on registration → local-only.
 - A rollback of the server binary leaves the v4 tables untouched, and registrations survive a re-deploy.
 
-## Open questions for the user
+## Open questions (resolved 2026-10-17: the user approved without answering, so the defaults below apply; they can be revisited)
 
 1. **Second prompt after a push you answered.** A push was sent and you answered from the phone, so the turn's push is used up, and a later permission prompt in the same turn is silent. The alternative: re-arm once you answer (the status went back to `busy`), with presence/`attended` still suppressing while you're there. Default in this doc: strict one *sent* push per turn, as the handover asked.
 2. **Quiet hours.** Passive delivery (silent, waits in Notification Center), which this doc assumes, or drop entirely? iOS Sleep/Focus already silences the phone at night. Should server quiet hours exist at all? If not, the `quiet_*` columns and the timezone crate (`chrono-tz`; the server has no date/time crate today) go away.
